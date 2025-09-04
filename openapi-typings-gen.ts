@@ -310,7 +310,7 @@ const generateTypesFromSpec = (spec: OpenAPISpec): string => {
 }
 
 const generateTypes = async (spec: OpenAPISpec): Promise<string> => {
-    const bundled = (await $RefParser.bundle(JSON.parse(JSON.stringify(spec)))) as OpenAPISpec
+    const bundled = (await $RefParser.bundle(spec)) as OpenAPISpec
     const types = generateTypesFromSpec(bundled)
 
     const config: prettier.Options = {

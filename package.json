@@ -1,6 +1,6 @@
 {
     "name": "@kallinen/openapi-typings-gen",
-    "version": "0.1.0",
+    "version": "0.1.1",
     "description": "Generates TypeScript types from OpenAPI specs",
     "main": "dist/index.cjs.js",
     "module": "dist/index.esm.js",
@@ -34,5 +34,13 @@
         "@types/node": "^24.3.0",
         "tsup": "^8.5.0",
         "typescript": "^5.9.2"
+    },
+    "homepage": "https://github.com/kallinen/openapi-typings-gen#readme",
+    "repository": {
+        "type": "git",
+        "url": "git+https://github.com/kallinen/openapi-typings-gen.git"
+    },
+    "bugs": {
+        "url": "https://github.com/kallinen/openapi-typings-gen/issues"
     }
 }

@@ -1,0 +1,38 @@
+{
+    "name": "@kallinen/openapi-typings-gen",
+    "version": "0.1.0",
+    "description": "Generates TypeScript types from OpenAPI specs",
+    "main": "dist/index.cjs.js",
+    "module": "dist/index.esm.js",
+    "types": "dist/index.d.ts",
+    "bin": {
+        "openapi-typings-gen": "dist/openapi-typings-gen.js"
+    },
+    "scripts": {
+        "build": "tsup openapi-typings-gen.ts --format cjs,esm --dts",
+        "start": "node dist/openapi-typings-gen.js"
+    },
+    "files": [
+        "dist"
+    ],
+    "keywords": [
+        "openapi",
+        "typescript",
+        "generator",
+        "cli"
+    ],
+    "author": "Joonas Kallinen",
+    "license": "MIT",
+    "dependencies": {
+        "@apidevtools/json-schema-ref-parser": "^14.2.0",
+        "lodash": "^4.17.21",
+        "prettier": "^3.6.2",
+        "yaml": "^2.8.1"
+    },
+    "devDependencies": {
+        "@types/lodash": "^4.17.20",
+        "@types/node": "^24.3.0",
+        "tsup": "^8.5.0",
+        "typescript": "^5.9.2"
+    }
+}

@@ -30,8 +30,7 @@ const makeComment = (schema: Record<string, any>, indentLevel = 0): string => {
     if (schema.example !== undefined) {
         let exampleStr: string[]
         if (typeof schema.example === 'object') {
-            exampleStr = JSON.stringify(schema.example, null, 2)
-                .split('\n')
+            exampleStr = JSON.stringify(schema.example, null, 2).split('\n')
         } else {
             exampleStr = [String(schema.example)]
         }
@@ -115,17 +114,29 @@ const generateComponentTypes = (spec: OpenAPISpec): string => {
         const typeName = toSafeName(name)
         const typeBody = mapSchemaToType(schema)
         // prefer interfaces for objects, type aliases otherwise
+        const globalExport = `export type ${typeName} = Components.Schemas.${typeName};`
         if (schema.type === 'object' || schema.properties) {
-            return `export interface ${typeName} ${typeBody}`
+            return {
+                mainType: `export interface ${typeName} ${typeBody}`,
+                globalExport,
+            }
         } else {
-            return `export type ${typeName} = ${typeBody};`
+            return {
+                mainType: `export type ${typeName} = ${typeBody};`,
+                globalExport,
+            }
         }
     })
+    const namespaceContent = entries.map(e => '    ' + e.mainType.replace(/\n/g, '\n    ')).join('\n\n')
+    const globalExports = entries.map(e => e.globalExport).join('\n')
+
     return `export namespace Components {
-  export namespace Schemas {
-${entries.map((e) => '    ' + e.replace(/\n/g, '\n    ')).join('\n\n')}
-  }
-}`
+        export namespace Schemas {
+            ${namespaceContent}
+        }
+    }
+    ${globalExports}
+    `
 }
 
 const generateTypesFromSpec = (spec: OpenAPISpec): string => {

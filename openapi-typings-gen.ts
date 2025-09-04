@@ -72,7 +72,7 @@ const mapSchemaToType = (schema: Record<string, any>, indentLevel = 0, ancestors
         case 'boolean':
             return 'boolean'
         case 'array':
-            return `${mapSchemaToType(schema.items, indentLevel, [...ancestors, schema], depth + 1)}[]`
+            return `(${mapSchemaToType(schema.items, indentLevel, [...ancestors, schema], depth + 1)})[]`
         case 'object':
             if (schema.properties) {
                 const props = Object.entries(schema.properties)
@@ -127,8 +127,8 @@ const generateComponentTypes = (spec: OpenAPISpec): string => {
             }
         }
     })
-    const namespaceContent = entries.map(e => '    ' + e.mainType.replace(/\n/g, '\n    ')).join('\n\n')
-    const globalExports = entries.map(e => e.globalExport).join('\n')
+    const namespaceContent = entries.map((e) => '    ' + e.mainType.replace(/\n/g, '\n    ')).join('\n\n')
+    const globalExports = entries.map((e) => e.globalExport).join('\n')
 
     return `export namespace Components {
         export namespace Schemas {
@@ -138,7 +138,6 @@ const generateComponentTypes = (spec: OpenAPISpec): string => {
     ${globalExports}
     `
 }
-
 const generateTypesFromSpec = (spec: OpenAPISpec): string => {
     const operations: string[] = []
     const pathEntries: string[] = []
@@ -155,18 +154,37 @@ const generateTypesFromSpec = (spec: OpenAPISpec): string => {
             const summary = `${opId}${op.summary ? ` – ${op.summary}` : ''}`
 
             // --- Parameters ---
-            const paramsTypeParts: string[] = []
-            ;['path', 'query', 'header', 'cookie'].forEach((location) => {
-                const params = (op.parameters || []).filter((p: any) => p.in === location)
-                if (params.length) {
-                    paramsTypeParts.push(
-                        `{ ${params
-                            .map((p: any) => `${p.name}${p.required ? '' : '?'}: ${mapSchemaToType(p.schema)}`)
-                            .join('; ')} }`,
-                    )
-                }
+            const paramNamespaces: string[] = []
+            const pathParamKeys: string[] = []
+            const queryParamKeys: string[] = []
+
+            ;(op.parameters || []).forEach((p: any) => {
+                const typeName = upperFirst(toSafeName(p.name))
+                const typeBody = mapSchemaToType(p.schema)
+                paramNamespaces.push(`export type ${typeName} = ${typeBody};`)
+
+                if (p.in === 'path') pathParamKeys.push(p.name)
+                else if (p.in === 'query') queryParamKeys.push(p.name)
             })
-            const parametersType = paramsTypeParts.length ? paramsTypeParts.join(' & ') : 'UnknownParamsObject'
+
+            const pathParamsInterface =
+                pathParamKeys.length > 0
+                    ? `export interface PathParameters {\n${pathParamKeys
+                          .map((n) => `    ${n}: Parameters.${upperFirst(toSafeName(n))};`)
+                          .join('\n')}\n}`
+                    : `export interface PathParameters {}`
+
+            const queryParamsInterface =
+                queryParamKeys.length > 0
+                    ? `export interface QueryParameters {\n${queryParamKeys
+                          .map(
+                              (n) =>
+                                  `    ${n}${
+                                      (op.parameters || []).find((p: any) => p.name === n)?.required ? '' : '?'
+                                  }: Parameters.${upperFirst(toSafeName(n))};`,
+                          )
+                          .join('\n')}\n}`
+                    : `export interface QueryParameters {}`
 
             // --- Request Body ---
             let bodySchema: any
@@ -186,7 +204,6 @@ const generateTypesFromSpec = (spec: OpenAPISpec): string => {
                 }
             }
 
-            // --- Generate comment string ---
             const bodyComment = bodyCommentLines.length ? `/** ${bodyCommentLines.join('; ')} */\n` : ''
 
             // --- Responses ---
@@ -196,29 +213,32 @@ const generateTypesFromSpec = (spec: OpenAPISpec): string => {
                 const schema = response?.content?.['application/json']?.schema
                 const comment = makeComment(schema, 2)
                 if (!schema) {
-                    // No schema -> any
                     responseInterfaces.push(`${comment}export type $${status} = any;`)
                 } else if (schema.type === 'object' || schema.properties) {
-                    // Object -> interface
                     const ifaceBody = mapSchemaToType(schema, 2)
                     responseInterfaces.push(`${comment}export interface $${status} ${ifaceBody}`)
                 } else {
-                    // Primitive or array -> type alias
                     const typeBody = mapSchemaToType(schema, 2)
                     responseInterfaces.push(`${comment}export type $${status} = ${typeBody};`)
                 }
-
                 responseRefs.push(`$${status}`)
             }
 
-            // --- Namespace for path operation ---
+            // --- Paths Namespace ---
             pathsNamespace.push(`export namespace ${upperFirst(opId)} {
-${bodyComment}  export type RequestBody = ${bodySchema ? mapSchemaToType(bodySchema) : 'undefined'};
-  export namespace Responses {
-    ${responseInterfaces.join('\n    ')}
-  }
-}`)
+                ${bodyComment}export type RequestBody = ${bodySchema ? mapSchemaToType(bodySchema) : 'undefined'};
 
+                export namespace Parameters {
+                    ${paramNamespaces.join('\n        ')}
+                }
+
+                ${pathParamsInterface}
+                ${queryParamsInterface}
+
+                export namespace Responses {
+                    ${responseInterfaces.join('\n    ')}
+                }
+            }`)
             // --- OperationMethods ---
             const mainResponseRef = responseRefs[0] ? `Paths.${upperFirst(opId)}.Responses.${responseRefs[0]}` : 'any'
             const cleanedDescription = cleanDescription(op.description)
@@ -226,24 +246,37 @@ ${bodyComment}  export type RequestBody = ${bodySchema ? mapSchemaToType(bodySch
             if (cleanedDescription) commentLines.push(` * ${cleanedDescription}`)
             commentLines.push(' */')
 
+            let paramTypeParts: string[] = []
+
+            if (pathParamKeys.length > 0) {
+                paramTypeParts.push(`Paths.${upperFirst(opId)}.PathParameters`)
+            }
+
+            if (queryParamKeys.length > 0) {
+                paramTypeParts.push(`Paths.${upperFirst(opId)}.QueryParameters`)
+            }
+
+            const params =
+                paramTypeParts.length > 0 ? `Parameters<${paramTypeParts.join(' & ')} | null>` : 'null | undefined'
+
             operations.push(`
-${commentLines.join('\n')}
-${opId}(
-  parameters?: Parameters<${parametersType}> | null,
-  data?: Paths.${upperFirst(opId)}.RequestBody,
-  config?: AxiosRequestConfig
-): OperationResponse<${mainResponseRef}>;`)
-            // --- PathsDictionary ---
+            ${commentLines.join('\n')}
+            ${opId}(
+                parameters?: ${params},
+                data?: Paths.${upperFirst(opId)}.RequestBody,
+                config?: AxiosRequestConfig
+            ): OperationResponse<${mainResponseRef}>;`)
+
             methodEntries.push(`
-  '${method}': (
-    parameters?: Parameters<${parametersType}> | null,
-    data?: Paths.${upperFirst(opId)}.RequestBody,
-    config?: AxiosRequestConfig
-  ) => OperationResponse<${mainResponseRef}>;`)
+            '${method}': (
+                parameters?: ${params},
+                data?: Paths.${upperFirst(opId)}.RequestBody,
+                config?: AxiosRequestConfig
+            ) => OperationResponse<${mainResponseRef}>;`)
         }
 
         if (methodEntries.length) {
-            pathEntries.push(`  '${pathKey}': {${methodEntries.join('')}\n  }`)
+            pathEntries.push(`'${pathKey}': {${methodEntries.join('')}\n}`)
         }
     }
 
@@ -251,24 +284,29 @@ ${opId}(
     const pathsBlock = `export namespace Paths {\n${pathsNamespace.join('\n')}\n}`
 
     return `
-        // Auto-generated from OpenAPI spec
-        ${componentTypes}
+            // Auto-generated from OpenAPI spec
+            ${componentTypes}
 
-        ${pathsBlock}
+            ${pathsBlock}
 
-        export interface OperationMethods {${operations.join('\n')}
-        }
+            export interface OperationMethods {${operations.join('\n')}
+            }
 
-        export interface PathsDictionary {
-        ${pathEntries.join('\n')}
-        }
+            export interface PathsDictionary {
+            ${pathEntries.join('\n')}
+            }
 
-        export type Parameters<T = UnknownParamsObject> = T;
-        export type OperationResponse<T = any> = Promise<T>;
-        export type UnknownParamsObject = { [key: string]: any };
-        export type AxiosRequestConfig = any;
-        
-        `
+            export type ImplicitParamValue = string | number;
+            export interface UnknownParamsObject {
+                [parameter: string]: ImplicitParamValue;
+            }
+            export type SingleParam = ImplicitParamValue;
+            export type Parameters<ParamsObject = UnknownParamsObject> =
+                | ParamsObject    // multiple named params
+                | SingleParam     // single primitive param
+            export type OperationResponse<T = any> = Promise<T>
+            export type AxiosRequestConfig = any
+`
 }
 
 const generateTypes = async (spec: OpenAPISpec): Promise<string> => {

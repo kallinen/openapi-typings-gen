@@ -35,7 +35,6 @@ const makeComment = (schema: Record<string, any>, indentLevel = 0): string => {
             exampleStr = [String(schema.example)]
         }
 
-        // Prefix each line with proper JSDoc indentation
         const indent = ' '.repeat(indentLevel * 2)
         const formattedExample = exampleStr.map((line) => `${indent} * ${line}`).join('\n')
         lines.push(`example:\n${formattedExample}`)
@@ -67,6 +66,7 @@ const mapSchemaToType = (schema: Record<string, any>, indentLevel = 0, ancestors
         case 'string':
             return 'string'
         case 'integer':
+            return 'number' 
         case 'number':
             return 'number'
         case 'boolean':
@@ -113,7 +113,6 @@ const generateComponentTypes = (spec: OpenAPISpec): string => {
     const entries = Object.entries(spec.components.schemas).map(([name, schema]) => {
         const typeName = toSafeName(name)
         const typeBody = mapSchemaToType(schema)
-        // prefer interfaces for objects, type aliases otherwise
         const globalExport = `export type ${typeName} = Components.Schemas.${typeName};`
         if (schema.type === 'object' || schema.properties) {
             return {
@@ -153,7 +152,6 @@ const generateTypesFromSpec = (spec: OpenAPISpec): string => {
                 : toSafeName(camelCase(`${method} ${pathKey.replace(/[\/{}]/g, ' ')}`))
             const summary = `${opId}${op.summary ? ` – ${op.summary}` : ''}`
 
-            // --- Parameters ---
             const paramNamespaces: string[] = []
             const pathParamKeys: string[] = []
             const queryParamKeys: string[] = []
@@ -186,7 +184,6 @@ const generateTypesFromSpec = (spec: OpenAPISpec): string => {
                           .join('\n')}\n}`
                     : `export interface QueryParameters {}`
 
-            // --- Request Body ---
             let bodySchema: any
             let bodyCommentLines: string[] = []
 
@@ -206,7 +203,6 @@ const generateTypesFromSpec = (spec: OpenAPISpec): string => {
 
             const bodyComment = bodyCommentLines.length ? `/** ${bodyCommentLines.join('; ')} */\n` : ''
 
-            // --- Responses ---
             const responseInterfaces: string[] = []
             const responseRefs: string[] = []
             for (const [status, response] of Object.entries<any>(op.responses || {})) {
@@ -224,7 +220,6 @@ const generateTypesFromSpec = (spec: OpenAPISpec): string => {
                 responseRefs.push(`$${status}`)
             }
 
-            // --- Paths Namespace ---
             pathsNamespace.push(`export namespace ${upperFirst(opId)} {
                 ${bodyComment}export type RequestBody = ${bodySchema ? mapSchemaToType(bodySchema) : 'undefined'};
 
@@ -239,7 +234,6 @@ const generateTypesFromSpec = (spec: OpenAPISpec): string => {
                     ${responseInterfaces.join('\n    ')}
                 }
             }`)
-            // --- OperationMethods ---
             const mainResponseRef = responseRefs[0] ? `Paths.${upperFirst(opId)}.Responses.${responseRefs[0]}` : 'any'
             const cleanedDescription = cleanDescription(op.description)
             const commentLines = [`/** ${summary}`]

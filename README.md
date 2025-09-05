@@ -5,5 +5,5 @@
 Generate types with single command
 
 ```
-npx openapi-typings-gen openapi.json > openapi-types.d.ts
+npx @kallinen/openapi-typings-gen openapi.json > openapi-types.d.ts
 ```

@@ -1,6 +1,6 @@
 {
     "name": "@kallinen/openapi-typings-gen",
-    "version": "0.1.5",
+    "version": "0.2.0",
     "description": "Generates TypeScript types from OpenAPI specs",
     "main": "dist/index.cjs.js",
     "module": "dist/index.esm.js",
@@ -9,7 +9,7 @@
         "openapi-typings-gen": "dist/openapi-typings-gen.js"
     },
     "scripts": {
-        "build": "tsup openapi-typings-gen.ts --format cjs,esm --dts",
+        "build": "tsup src --format cjs,esm --dts",
         "start": "node dist/openapi-typings-gen.js"
     },
     "files": [

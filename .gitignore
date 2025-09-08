@@ -1,3 +1,6 @@
 dist
 node_modules
-spec.*
+*.spec.json
+*.spec.ts
+spec.json
+spec.ts

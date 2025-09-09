@@ -7,6 +7,10 @@ export const isSchemaRef = (s: SchemaRef | Schema): s is SchemaRef => {
 export type SchemaRef = { $ref: string } // keep for later resolution
 
 export interface Schema {
+    anyOf: (Schema | SchemaRef)[]
+    oneOf: (Schema | SchemaRef)[]
+    allOf: (Schema | SchemaRef)[]
+    not: (Schema | SchemaRef)[]
     type?: 'string' | 'number' | 'integer' | 'boolean' | 'object' | 'array'
     properties?: Record<string, Schema | SchemaRef>
     items?: Schema | SchemaRef
@@ -43,7 +47,7 @@ export interface MediaType {
 
 export interface OpenAPIResponse {
     description?: string
-    headers?: Record<string, any> 
+    headers?: Record<string, any>
     content?: Record<string, MediaType>
 }
 
@@ -93,7 +97,7 @@ export interface OperationIR {
 }
 
 export interface ComponentIR {
-    name: string;
-    type: TypeNode;
-    description?: string;
+    name: string
+    type: TypeNode
+    description?: string
 }

@@ -368,7 +368,19 @@ export const mapSchemaToTypeNode = (
     if (ancestors.includes(schema) || depth > 5) return identifier(schema.type ?? 'any', schema)
 
     if (schema.enum) {
-        return union(schema.enum.map((v: any) => literal(v)))
+        return union(schema.enum.map((v) => literal(v)))
+    }
+
+    if (schema.anyOf) {
+        return union(schema.anyOf.map(v => mapSchemaToTypeNode(v, ancestors, depth + 1)))
+    }
+
+    if (schema.allOf) {
+        return intersection(schema.allOf.map(v => mapSchemaToTypeNode(v, ancestors, depth + 1)))
+    }
+
+    if (schema.oneOf) {
+        return union(schema.oneOf.map(v => mapSchemaToTypeNode(v, ancestors, depth + 1)))
     }
 
     switch (schema.type) {
@@ -383,6 +395,7 @@ export const mapSchemaToTypeNode = (
             return arrayOf(mapSchemaToTypeNode(schema.items!, [...ancestors, schema], depth + 1))
         case 'object': {
             if (schema.properties) {
+                console
                 const props: Record<string, TypeNode> = {}
                 for (const [k, v] of Object.entries(schema.properties)) {
                     props[k] = mapSchemaToTypeNode(v as Schema | SchemaRef, [...ancestors, schema], depth + 1)

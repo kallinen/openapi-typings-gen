@@ -2,5 +2,7 @@ dist
 node_modules
 *.spec.json
 *.spec.ts
+*.spec.yaml
 spec.json
 spec.ts
+spec.yaml

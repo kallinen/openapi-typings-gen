@@ -5,7 +5,14 @@ import YAML from 'yaml'
 import $RefParser from '@apidevtools/json-schema-ref-parser'
 import prettier from 'prettier'
 import { OpenApiIR } from './types'
-import { renderComponents, renderPaths, renderOperations, renderPathsDictionary, generateIROperations, generateComponentTypes } from './functions'
+import {
+    renderComponents,
+    renderPaths,
+    renderOperations,
+    renderPathsDictionary,
+    generateIROperations,
+    generateComponentTypes,
+} from './functions'
 import { parseArgs } from './cli-parser'
 
 const CONSTANT_TYPES = `
@@ -56,12 +63,20 @@ const main = async () => {
     const { keepNoOpId, input, output } = parseArgs(process.argv)
     const file = input ?? process.argv[2]
     if (!file) {
-        console.error('Usage: @kallinen/openapi-typings-gen <openapi.json|yaml>')
+        console.error(
+            `Usage:
+@kallinen/openapi-typings-gen <openapi.json|yaml>
+
+Options:
+-i, --input   Path to input OpenAPI spec (json|yaml)
+-o, --output  Path to output .ts file
+-k, --keep    Keep methods without operationId (optional)`,
+        )
         process.exit(1)
     }
     const spec = await loadSpec(path.resolve(file))
     const types = await generateTypes(spec, keepNoOpId)
-        const config: prettier.Options = {
+    const config: prettier.Options = {
         parser: 'typescript',
         semi: false,
         singleQuote: true,

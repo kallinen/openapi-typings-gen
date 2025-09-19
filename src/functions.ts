@@ -182,45 +182,52 @@ export const renderPaths = (operations: OperationIR[]) => {
             const queryParamsLines = op.parameters.query.map(mapFn).join('\n')
 
             return `
-        export namespace ${upperFirst(op.id)} {
-            export type RequestBody = ${op.requestBody ? renderType(op.requestBody.type) : 'undefined'};
+            export namespace ${upperFirst(op.id)} {
+                export type RequestBody = ${op.requestBody ? renderType(op.requestBody.type) : 'undefined'};
 
-            export namespace Parameters {
-                ${[...op.parameters.path, ...op.parameters.query].map(renderParam).join('\n')}
-            }
+                export namespace Parameters {
+                    ${[...op.parameters.path, ...op.parameters.query].map(renderParam).join('\n')}
+                }
 
-            export interface PathParameters {
-${pathParamsLines}
-            }
+                export interface PathParameters {
+                    ${pathParamsLines}
+                }
 
-            export interface QueryParameters {
-${queryParamsLines}
-            }
+                export interface QueryParameters {
+                    ${queryParamsLines}
+                }
 
-            export namespace Responses {
-${Object.entries(op.responses)
-    .map(([status, resp]) => {
-        if (!resp.content) return `export type $${status} = undefined;`
+                export namespace Responses {
+                    ${Object.entries(op.responses)
+                        .map(([status, resp]) => {
+                    if (!resp.content) {
+                        return `export type $${status} = undefined;`
+                    }
 
-        return Object.entries(resp.content)
-            .map(([mime, media]) => {
-                const typeNode: TypeNode = media.schema
-                    ? mapSchemaToTypeNode(media.schema)
-                    : { kind: 'identifier', name: 'unknown' }
-                const tsType = renderType(typeNode)
-                return `/** ${mime} */\nexport type $${status} = ${tsType};`
-            })
-            .join('\n')
-    })
-    .join('\n')}
-}
-        }`
-        })
-        .join('\n')
+                    const entries = Object.entries(resp.content)
+
+                    const typeNodes = entries.map(([_, media]) =>
+                        media.schema
+                            ? mapSchemaToTypeNode(media.schema)
+                            : ({ kind: 'identifier', name: 'unknown' } satisfies TypeNode),
+                    )
+
+                    const deduped = Array.from(new Map(typeNodes.map((tn) => [renderType(tn), tn])).values())
+
+                    const tsType = renderType(union(deduped))
+
+                    const mimes = entries.map(([mime]) => mime).join(', ')
+
+                    return `/** ${mimes} */\nexport type $${status} = ${tsType};`
+                })
+                .join('\n')}
+                }
+            }`
+            }).join('\n')
 
     return `export namespace Paths {
-            ${operationsString}
-        }`
+                ${operationsString}
+            }`
 }
 
 export const renderOperations = (operations: OperationIR[]) => {
@@ -333,9 +340,7 @@ export const renderType = (node: TypeNode): string => {
 
                 if (type.example !== undefined) {
                     lines.push('example:')
-                        const example = typeof type.example === 'string'
-                            ? type.example
-                            : JSON.stringify(type.example)
+                    const example = typeof type.example === 'string' ? type.example : JSON.stringify(type.example)
                     lines.push(example)
                 }
                 if (lines.length) {
@@ -372,15 +377,15 @@ export const mapSchemaToTypeNode = (
     }
 
     if (schema.anyOf) {
-        return union(schema.anyOf.map(v => mapSchemaToTypeNode(v, ancestors, depth + 1)))
+        return union(schema.anyOf.map((v) => mapSchemaToTypeNode(v, ancestors, depth + 1)))
     }
 
     if (schema.allOf) {
-        return intersection(schema.allOf.map(v => mapSchemaToTypeNode(v, ancestors, depth + 1)))
+        return intersection(schema.allOf.map((v) => mapSchemaToTypeNode(v, ancestors, depth + 1)))
     }
 
     if (schema.oneOf) {
-        return union(schema.oneOf.map(v => mapSchemaToTypeNode(v, ancestors, depth + 1)))
+        return union(schema.oneOf.map((v) => mapSchemaToTypeNode(v, ancestors, depth + 1)))
     }
 
     switch (schema.type) {

@@ -4,15 +4,17 @@ type CLIOptions = {
     output?: string
 }
 
-const createSetter = (opts: CLIOptions) => <K extends keyof CLIOptions>(key: K, value: CLIOptions[K]) => {
-    opts[key] = value
-}
+const createSetter =
+    <T extends Record<string, any>>(opts: T) =>
+    <K extends keyof T>(key: K, value: T[K]) => {
+        opts[key] = value
+    }
 
 export const parseArgs = (argv: string[]): CLIOptions => {
     const opts: CLIOptions = { keepNoOpId: false }
 
     const aliasMap: Record<string, keyof CLIOptions> = {
-        '--keep-no-opid': 'keepNoOpId',
+        '--keep': 'keepNoOpId',
         '-k': 'keepNoOpId',
         '--input': 'input',
         '-i': 'input',

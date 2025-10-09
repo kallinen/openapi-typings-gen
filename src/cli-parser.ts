@@ -2,6 +2,7 @@ type CLIOptions = {
     keepNoOpId: boolean
     input?: string
     output?: string
+    zod: boolean
 }
 
 const createSetter =
@@ -11,7 +12,7 @@ const createSetter =
     }
 
 export const parseArgs = (argv: string[]): CLIOptions => {
-    const opts: CLIOptions = { keepNoOpId: false }
+    const opts: CLIOptions = { keepNoOpId: false, zod: false }
 
     const aliasMap: Record<string, keyof CLIOptions> = {
         '--keep': 'keepNoOpId',
@@ -20,6 +21,8 @@ export const parseArgs = (argv: string[]): CLIOptions => {
         '-i': 'input',
         '--output': 'output',
         '-o': 'output',
+        '--zod': 'zod',
+        '-z': 'zod',
     }
 
     const setOption = createSetter(opts)

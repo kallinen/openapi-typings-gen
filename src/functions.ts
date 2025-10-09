@@ -130,10 +130,12 @@ const cleanDescription = (desc?: string): string | undefined => {
     return cleaned
 }
 
-export const renderComponents = (components: ComponentIR[]) => {
+export const renderComponents = (components: ComponentIR[], zod: boolean) => {
     return `
     export namespace Components {
         export namespace Schemas {
+            ${zod ? renderZodComponents(components) : ''}
+
             ${components
                 .map((item) => {
                     const exportType = item.type.kind === 'object' ? 'interface' : 'type'
@@ -153,6 +155,61 @@ const isSafeParam = (name: string) => /^[$A-Z_][0-9A-Z_$]*$/i.test(name)
 const safeParamName = (name: string) => (isSafeParam(name) ? name : `"${name}"`)
 const toSafeName = (name: string): string => {
     return name.replace(/[^a-zA-Z0-9_]/g, '_')
+}
+
+export const renderZod = (node: TypeNode, processing: Set<string> = new Set()): string => {
+    switch (node.kind) {
+        case 'identifier':
+            if (['string', 'number', 'boolean'].includes(node.name!)) {
+                return `z.${node.name}()`
+            }
+            if (node.name === '{ [key: string]: any }') {
+                return `z.record(z.string(), z.any())`
+            }
+            if (processing.has(node.name!)) {
+                return `z.lazy(() => ${node.name}Schema)`
+            }
+            return `${node.name}Schema`
+
+        case 'literal':
+            return `z.literal(${JSON.stringify(node.value)})`
+
+        case 'array':
+            return `z.array(${renderZod(node.element!, processing)})`
+
+        case 'union':
+            return `z.union([${node.types!.map((t) => renderZod(t, processing)).join(', ')}])`
+
+        case 'intersection':
+            return `z.intersection(${renderZod(node.types![0], processing)}, ${renderZod(node.types![1], processing)})`
+
+        case 'object': {
+            const props = Object.entries(node.properties || {})
+                .map(([key, val]) => {
+                    const required = node.required?.includes(key) ? '' : '.optional()'
+                    return `"${key}": ${renderZod(val, processing)}${required}`
+                })
+                .join(', ')
+            return `z.object({ ${props} })`
+        }
+
+        case 'generic':
+            return `${renderZod(node.base!, processing)}<${node.params!.map((p) => renderZod(p, processing)).join(', ')}>`
+    }
+}
+
+export const renderZodComponents = (components: ComponentIR[]): string => {
+    const processing = new Set<string>()
+
+    return components
+        .map((item) => {
+            processing.add(item.name)
+            const schemaStr = renderZod(item.type, processing)
+            processing.delete(item.name)
+
+            return `export const ${item.name}Schema: z.ZodType<any> = ${schemaStr};`
+        })
+        .join('\n\n')
 }
 
 export const renderPaths = (operations: OperationIR[]) => {
@@ -200,30 +257,31 @@ export const renderPaths = (operations: OperationIR[]) => {
                 export namespace Responses {
                     ${Object.entries(op.responses)
                         .map(([status, resp]) => {
-                    if (!resp.content) {
-                        return `export type $${status} = undefined;`
-                    }
+                            if (!resp.content) {
+                                return `export type $${status} = undefined;`
+                            }
 
-                    const entries = Object.entries(resp.content)
+                            const entries = Object.entries(resp.content)
 
-                    const typeNodes = entries.map(([_, media]) =>
-                        media.schema
-                            ? mapSchemaToTypeNode(media.schema)
-                            : ({ kind: 'identifier', name: 'unknown' } satisfies TypeNode),
-                    )
+                            const typeNodes = entries.map(([_, media]) =>
+                                media.schema
+                                    ? mapSchemaToTypeNode(media.schema)
+                                    : ({ kind: 'identifier', name: 'unknown' } satisfies TypeNode),
+                            )
 
-                    const deduped = Array.from(new Map(typeNodes.map((tn) => [renderType(tn), tn])).values())
+                            const deduped = Array.from(new Map(typeNodes.map((tn) => [renderType(tn), tn])).values())
 
-                    const tsType = renderType(union(deduped))
+                            const tsType = renderType(union(deduped))
 
-                    const mimes = entries.map(([mime]) => mime).join(', ')
+                            const mimes = entries.map(([mime]) => mime).join(', ')
 
-                    return `/** ${mimes} */\nexport type $${status} = ${tsType};`
-                })
-                .join('\n')}
+                            return `/** ${mimes} */\nexport type $${status} = ${tsType};`
+                        })
+                        .join('\n')}
                 }
             }`
-            }).join('\n')
+        })
+        .join('\n')
 
     return `export namespace Paths {
                 ${operationsString}

@@ -34,16 +34,18 @@ const loadSpec = async (file: string): Promise<OpenApiIR> => {
     return JSON.parse(content)
 }
 
-const generateTypes = async (spec: OpenApiIR, keepNoOpId: boolean): Promise<string> => {
+const generateTypes = async (spec: OpenApiIR, keepNoOpId: boolean, zod: boolean): Promise<string> => {
     const bundled = (await $RefParser.bundle(spec)) as OpenApiIR
     const operations = generateIROperations(bundled, keepNoOpId)
     const components = generateComponentTypes(bundled.components)
-    const componentsString = renderComponents(components)
+    const componentsString = renderComponents(components, zod)
     const pathsString = renderPaths(operations)
     const opsString = renderOperations(operations)
     const pathDictString = renderPathsDictionary(operations)
 
     const combinedString = `
+        ${zod ? "import { z } from 'zod'" : ''}
+
         // Automatically generated types
         ${componentsString}
 
@@ -60,22 +62,23 @@ const generateTypes = async (spec: OpenApiIR, keepNoOpId: boolean): Promise<stri
 }
 
 const main = async () => {
-    const { keepNoOpId, input, output } = parseArgs(process.argv)
+    const { keepNoOpId, input, output, zod } = parseArgs(process.argv)
     const file = input ?? process.argv[2]
     if (!file) {
         console.error(
             `Usage:
-@kallinen/openapi-typings-gen <openapi.json|yaml>
+@kallinen/openapi-typings-gen <options>
 
 Options:
 -i, --input   Path to input OpenAPI spec (json|yaml)
 -o, --output  Path to output .ts file
--k, --keep    Keep methods without operationId (optional)`,
+-k, --keep    Keep methods without operationId (optional)
+-z, --zod     Generate Zod validation schemas (optional)`,
         )
         process.exit(1)
     }
     const spec = await loadSpec(path.resolve(file))
-    const types = await generateTypes(spec, keepNoOpId)
+    const types = await generateTypes(spec, keepNoOpId, zod)
     const config: prettier.Options = {
         parser: 'typescript',
         semi: false,

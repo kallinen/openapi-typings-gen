@@ -13,3 +13,12 @@ The library supports also methods that don't have operationId set by adding -k a
 ```
 npx @kallinen/openapi-typings-gen -k -i openapi.json -o openapi-types.d.ts
 ```
+
+## Zod Validation
+
+You can generate Zod validation schemas along with TypeScript types by using the -z or --zod flag:
+```
+npx @kallinen/openapi-typings-gen -z -i openapi.json -o openapi-types.d.ts
+```
+
+⚠️ This feature is experimental and may change in future releases.

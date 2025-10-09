@@ -229,9 +229,10 @@ export const renderZodOperationMappings = (operations: OperationIR[]): string =>
             }
         }
 
-        const responseSchemaStr = responseSchemaName ? `Components.Schemas.${responseSchemaName}Schema` : 'undefined'
-
-        lines.push(`${op.id}: ${responseSchemaStr},`)
+        const responseSchemaStr = responseSchemaName ? `Components.Schemas.${responseSchemaName}Schema` : undefined
+        if (responseSchemaStr) {
+            lines.push(`${op.id}: ${responseSchemaStr},`)
+        }
     }
 
     lines.push(`} as const`)

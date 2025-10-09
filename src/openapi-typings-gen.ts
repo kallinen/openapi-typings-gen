@@ -12,6 +12,7 @@ import {
     renderPathsDictionary,
     generateIROperations,
     generateComponentTypes,
+    renderZodOperationMappings,
 } from './functions'
 import { parseArgs } from './cli-parser'
 
@@ -42,6 +43,7 @@ const generateTypes = async (spec: OpenApiIR, keepNoOpId: boolean, zod: boolean)
     const pathsString = renderPaths(operations)
     const opsString = renderOperations(operations)
     const pathDictString = renderPathsDictionary(operations)
+    const zodMappingString = renderZodOperationMappings(operations)
 
     const combinedString = `
         ${zod ? "import { z } from 'zod'" : ''}
@@ -54,6 +56,8 @@ const generateTypes = async (spec: OpenApiIR, keepNoOpId: boolean, zod: boolean)
         ${opsString}
 
         ${pathDictString}
+
+        ${zodMappingString}
 
         ${CONSTANT_TYPES}
     `

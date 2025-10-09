@@ -212,6 +212,32 @@ export const renderZodComponents = (components: ComponentIR[]): string => {
         .join('\n\n')
 }
 
+export const renderZodOperationMappings = (operations: OperationIR[]): string => {
+    const lines: string[] = []
+    lines.push(`export const apiResponseValidators = {`)
+
+    for (const op of operations) {
+        // Find first successful (2xx) response
+        const successResponse = Object.entries(op.responses).find(([status]) => status.startsWith('2'))
+        let responseSchemaName: string | undefined
+        if (successResponse) {
+            const resp = successResponse[1]
+            const media = Object.values(resp.content || {})[0] as MediaType | undefined
+            const schema = media?.schema
+            if (schema && isSchemaRef(schema)) {
+                responseSchemaName = toSafeName(schema.$ref.split('/').pop()!)
+            }
+        }
+
+        const responseSchemaStr = responseSchemaName ? `Components.Schemas.${responseSchemaName}Schema` : 'undefined'
+
+        lines.push(`${op.id}: ${responseSchemaStr},`)
+    }
+
+    lines.push(`} as const`)
+    return lines.join('\n')
+}
+
 export const renderPaths = (operations: OperationIR[]) => {
     const operationsString = operations
         .map((op) => {

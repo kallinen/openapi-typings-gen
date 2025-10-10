@@ -160,15 +160,22 @@ const toSafeName = (name: string): string => {
 export const renderZod = (node: TypeNode, processing: Set<string> = new Set()): string => {
     switch (node.kind) {
         case 'identifier':
+            // primitive types
             if (['string', 'number', 'boolean'].includes(node.name!)) {
                 return `z.${node.name}()`
             }
+
+            // generic object
             if (node.name === '{ [key: string]: any }') {
                 return `z.record(z.string(), z.any())`
             }
+
+            // recursion / lazy
             if (processing.has(node.name!)) {
                 return `z.lazy(() => ${node.name}Schema)`
             }
+
+            // fallback
             return `${node.name}Schema`
 
         case 'literal':
@@ -181,7 +188,12 @@ export const renderZod = (node: TypeNode, processing: Set<string> = new Set()): 
             return `z.union([${node.types!.map((t) => renderZod(t, processing)).join(', ')}])`
 
         case 'intersection':
-            return `z.intersection(${renderZod(node.types![0], processing)}, ${renderZod(node.types![1], processing)})`
+            return node.types!
+                .slice(1)
+                .reduce(
+                    (acc, t) => `z.intersection(${acc}, ${renderZod(t, processing)})`,
+                    renderZod(node.types![0], processing),
+                )
 
         case 'object': {
             const props = Object.entries(node.properties || {})
@@ -193,8 +205,19 @@ export const renderZod = (node: TypeNode, processing: Set<string> = new Set()): 
             return `z.object({ ${props} })`
         }
 
-        case 'generic':
+        case 'generic': {
+            // handle common Zod-compatible generics
+            if (node.base.kind === 'identifier' && node.base.name === 'Array' && node.params.length === 1) {
+                return `z.array(${renderZod(node.params[0], processing)})`
+            }
+
+            if (node.base.kind === 'identifier' && node.base.name === 'Record' && node.params.length === 2) {
+                return `z.record(${renderZod(node.params[0], processing)}, ${renderZod(node.params[1], processing)})`
+            }
+
+            // fallback to TS-style generic
             return `${renderZod(node.base!, processing)}<${node.params!.map((p) => renderZod(p, processing)).join(', ')}>`
+        }
     }
 }
 

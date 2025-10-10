@@ -1,6 +1,6 @@
 {
     "name": "@kallinen/openapi-typings-gen",
-    "version": "0.3.2",
+    "version": "0.3.4",
     "description": "Generates TypeScript types from OpenAPI specs",
     "main": "dist/index.cjs.js",
     "module": "dist/index.esm.js",
@@ -10,6 +10,7 @@
     },
     "scripts": {
         "build": "tsup src --format cjs,esm --dts",
+        "test": "jest --detectOpenHandles --config ./jest.config.js --colors --verbose --forceExit",
         "start": "node dist/openapi-typings-gen.js"
     },
     "files": [
@@ -30,10 +31,14 @@
         "yaml": "^2.8.1"
     },
     "devDependencies": {
+        "@types/jest": "^30.0.0",
         "@types/lodash": "^4.17.20",
         "@types/node": "^24.3.0",
+        "jest": "^30.2.0",
+        "ts-jest": "^29.4.4",
         "tsup": "^8.5.0",
-        "typescript": "^5.9.2"
+        "typescript": "^5.9.2",
+        "zod": "^4.1.12"
     },
     "homepage": "https://github.com/kallinen/openapi-typings-gen#readme",
     "repository": {

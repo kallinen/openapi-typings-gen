@@ -46,6 +46,8 @@ const generateTypes = async (spec: OpenApiIR, keepNoOpId: boolean, zod: boolean)
     const zodMappingString = renderZodOperationMappings(operations)
 
     const combinedString = `
+        /* eslint-disable @typescript-eslint/no-namespace */
+    
         ${zod ? "import { z } from 'zod'" : ''}
 
         // Automatically generated types

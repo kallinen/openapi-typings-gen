@@ -169,9 +169,10 @@ export const renderZod = (node: TypeNode, processing: Set<string> = new Set()): 
             if (node.name === '{ [key: string]: any }') {
                 return `z.record(z.string(), z.any())`
             }
-
+            
+            const nameKey = node.name.includes('.') ? node.name.split('.').pop()! : node.name
             // recursion / lazy
-            if (processing.has(node.name!)) {
+            if (processing.has(nameKey)) {
                 return `z.lazy(() => ${node.name}Schema)`
             }
 
@@ -227,13 +228,10 @@ export const renderZod = (node: TypeNode, processing: Set<string> = new Set()): 
 }
 
 export const renderZodComponents = (components: ComponentIR[]): string => {
-    const processing = new Set<string>()
-
+    const processing = new Set<string>(components.map((c) => c.name))
     return components
         .map((item) => {
-            processing.add(item.name)
             const schemaStr = renderZod(item.type, processing)
-            processing.delete(item.name)
 
             return `export const ${item.name}Schema: z.ZodType<any> = ${schemaStr};`
         })

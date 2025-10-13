@@ -184,12 +184,17 @@ export const renderZod = (node: TypeNode, processing: Set<string> = new Set()): 
         case 'array':
             return `z.array(${renderZod(node.element!, processing)})`
 
-        case 'union':
+        case 'union': {
+            if (node.types.length === 1) {
+                // avoid invalid single-member union
+                return renderZod(node.types[0], processing)
+            }
             return `z.union([${node.types!.map((t) => renderZod(t, processing)).join(', ')}])`
+        }
 
         case 'intersection':
-            return node.types!
-                .slice(1)
+            return node
+                .types!.slice(1)
                 .reduce(
                     (acc, t) => `z.intersection(${acc}, ${renderZod(t, processing)})`,
                     renderZod(node.types![0], processing),

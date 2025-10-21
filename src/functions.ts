@@ -204,7 +204,7 @@ export const renderZod = (node: TypeNode, processing: Set<string> = new Set()): 
         case 'object': {
             const props = Object.entries(node.properties || {})
                 .map(([key, val]) => {
-                    const required = node.required?.includes(key) ? '' : '.optional()'
+                    const required = node.required?.includes(key) ? '' : '.nullish()'
                     return `"${key}": ${renderZod(val, processing)}${required}`
                 })
                 .join(', ')

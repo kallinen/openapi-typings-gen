@@ -26,6 +26,7 @@ export interface OpenAPIParameter {
     required: boolean
     in: 'path' | 'query' | 'header' | 'cookie'
     schema: Schema | SchemaRef
+    $ref?: string // TODO: create discriminated union as $ref and other props are mutually exclusive
 }
 
 export interface MediaTypeObject {

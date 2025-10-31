@@ -59,7 +59,7 @@ const generateTypes = async (spec: OpenApiIR, keepNoOpId: boolean, zod: boolean)
 
         ${pathDictString}
 
-        ${zodMappingString}
+        ${zod ? zodMappingString : ''}
 
         ${CONSTANT_TYPES}
     `

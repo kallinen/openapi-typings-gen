@@ -15,6 +15,7 @@ import {
 type TypeNodeBase = {
     description?: string
     example?: string
+    nullable?: boolean
 }
 
 export type TypeNode =
@@ -53,10 +54,16 @@ export const generateIROperations = (spec: OpenApiIR, keepNoOpId: boolean): Oper
                 ? toSafeName(op.operationId)
                 : toSafeName(camelCase(`${method} ${pathKey.replace(/[\/{}]/g, ' ')}`))
             const summary = `${opId}${op.summary ? ` – ${op.summary}` : ''}`
+            const fallbackNamedParams = (op.parameters || []).map((p, i) => {
+                if (!p.name) {
+                    const refName = '$ref' in p ? (p.$ref?.split('/').pop() ?? `unnamedParam${i}`) : ''
+                    p.name = refName
+                }
+                return p
+            })
+            const filteredParams = fallbackNamedParams.filter((p) => !p.name.endsWith('@TypeHint'))
 
-            const filteredParams = (op.parameters || []).filter((p) => !p.name.endsWith('@TypeHint'))
-
-            const parameters = filteredParams.map((p) => {
+            const parameters = filteredParams.map((p, i) => {
                 const typeName = upperFirst(toSafeName(p.name))
                 const typeNode = mapSchemaToTypeNode(p.schema)
                 return { param: p, typeName, typeNode } as TypedParam
@@ -65,6 +72,7 @@ export const generateIROperations = (spec: OpenApiIR, keepNoOpId: boolean): Oper
             const requestBody: OperationIR['requestBody'] = (() => {
                 if (!op.requestBody?.content) return undefined
                 const [contentType, media] = Object.entries(op.requestBody.content)[0]
+
                 return {
                     contentType,
                     type: mapSchemaToTypeNode(media.schema),
@@ -157,72 +165,90 @@ const toSafeName = (name: string): string => {
     return name.replace(/[^a-zA-Z0-9_]/g, '_')
 }
 
+const withNullish = (expr: string, node: TypeNode): string => {
+    let suffix = ''
+    if (node.nullable) suffix += '.nullable()'
+    return `${expr}${suffix}`
+}
+
 export const renderZod = (node: TypeNode, processing: Set<string> = new Set()): string => {
     switch (node.kind) {
-        case 'identifier':
+        case 'identifier': {
             // primitive types
             if (['string', 'number', 'boolean'].includes(node.name!)) {
-                return `z.${node.name}()`
+                return withNullish(`z.${node.name}()`, node)
             }
 
-            // generic object
+            // generic record
             if (node.name === '{ [key: string]: any }') {
-                return `z.record(z.string(), z.any())`
+                return withNullish(`z.record(z.string(), z.any())`, node)
             }
-            
+
+            // recursion / lazy detection
             const nameKey = node.name.includes('.') ? node.name.split('.').pop()! : node.name
-            // recursion / lazy
             if (processing.has(nameKey)) {
-                return `z.lazy(() => ${node.name}Schema)`
+                return withNullish(`z.lazy(() => ${node.name}Schema)`, node)
             }
 
-            // fallback
-            return `${node.name}Schema`
-
-        case 'literal':
-            return `z.literal(${JSON.stringify(node.value)})`
-
-        case 'array':
-            return `z.array(${renderZod(node.element!, processing)})`
-
-        case 'union': {
-            if (node.types.length === 1) {
-                // avoid invalid single-member union
-                return renderZod(node.types[0], processing)
-            }
-            return `z.union([${node.types!.map((t) => renderZod(t, processing)).join(', ')}])`
+            // fallback to schema reference
+            return withNullish(`${node.name}Schema`, node)
         }
 
-        case 'intersection':
-            return node
+        case 'literal':
+            return withNullish(`z.literal(${JSON.stringify(node.value)})`, node)
+
+        case 'array': {
+            const element = renderZod(node.element!, processing)
+            return withNullish(`z.array(${element})`, node)
+        }
+
+        case 'union': {
+            const expr =
+                node.types.length === 1
+                    ? renderZod(node.types[0], processing)
+                    : `z.union([${node.types.map((t) => renderZod(t, processing)).join(', ')}])`
+            return withNullish(expr, node)
+        }
+
+        case 'intersection': {
+            const expr = node
                 .types!.slice(1)
                 .reduce(
                     (acc, t) => `z.intersection(${acc}, ${renderZod(t, processing)})`,
                     renderZod(node.types![0], processing),
                 )
+            return withNullish(expr, node)
+        }
 
         case 'object': {
             const props = Object.entries(node.properties || {})
                 .map(([key, val]) => {
-                    const required = node.required?.includes(key) ? '' : '.nullish()'
-                    return `"${key}": ${renderZod(val, processing)}${required}`
+                    const isRequired = node.required?.includes(key)
+                    const rendered = renderZod(val, processing)
+                    return `"${key}": ${isRequired ? rendered : `${rendered}.optional()`}`
                 })
                 .join(', ')
-            return `z.object({ ${props} })`
+            return withNullish(`z.object({ ${props} })`, node)
         }
 
         case 'generic': {
             // handle common Zod-compatible generics
             if (node.base.kind === 'identifier' && node.base.name === 'Array' && node.params.length === 1) {
-                return `z.array(${renderZod(node.params[0], processing)})`
+                return withNullish(`z.array(${renderZod(node.params[0], processing)})`, node)
             }
 
             if (node.base.kind === 'identifier' && node.base.name === 'Record' && node.params.length === 2) {
-                return `z.record(${renderZod(node.params[0], processing)}, ${renderZod(node.params[1], processing)})`
+                return withNullish(
+                    `z.record(${renderZod(node.params[0], processing)}, ${renderZod(node.params[1], processing)})`,
+                    node,
+                )
             }
 
             // fallback to TS-style generic
-            return `${renderZod(node.base!, processing)}<${node.params!.map((p) => renderZod(p, processing)).join(', ')}>`
+            const expr = `${renderZod(node.base!, processing)}<${node.params
+                .map((p) => renderZod(p, processing))
+                .join(', ')}>`
+            return withNullish(expr, node)
         }
     }
 }
@@ -232,7 +258,8 @@ export const renderZodComponents = (components: ComponentIR[]): string => {
     return components
         .map((item) => {
             const schemaStr = renderZod(item.type, processing)
-
+                .replace(/(?:\.optional\(\)\s*\.nullable\(\)|\.nullable\(\)\s*\.optional\(\))/g, '.nullish()')
+                .replace(/(\.nullish\(\)){2,}/g, '.nullish()')
             return `export const ${item.name}Schema: z.ZodType<any> = ${schemaStr};`
         })
         .join('\n\n')
@@ -263,6 +290,14 @@ export const renderZodOperationMappings = (operations: OperationIR[]): string =>
 
     lines.push(`} as const`)
     return lines.join('\n')
+}
+
+const sanitizeMime = (mime: string) => {
+    if (mime === '*/*') return 'any'
+    if (/[^a-zA-Z0-9/+.~-]/.test(mime)) {
+        return mime.replace(/[^\w/+.~-]/g, '_')
+    }
+    return mime
 }
 
 export const renderPaths = (operations: OperationIR[]) => {
@@ -326,7 +361,7 @@ export const renderPaths = (operations: OperationIR[]) => {
 
                             const tsType = renderType(union(deduped))
 
-                            const mimes = entries.map(([mime]) => mime).join(', ')
+                            const mimes = entries.map(([mime]) => sanitizeMime(mime)).join(', ')
 
                             return `/** ${mimes} */\nexport type $${status} = ${tsType};`
                         })
@@ -480,6 +515,10 @@ export const mapSchemaToTypeNode = (
         return identifier(`Components.Schemas.${toSafeName(refName)}`)
     }
 
+    if (!schema.type && schema.properties) {
+        schema.type = 'object'
+    }
+
     // prevent runaway recursion
     if (ancestors.includes(schema) || depth > 5) return identifier(schema.type ?? 'any', schema)
 
@@ -511,7 +550,6 @@ export const mapSchemaToTypeNode = (
             return arrayOf(mapSchemaToTypeNode(schema.items!, [...ancestors, schema], depth + 1))
         case 'object': {
             if (schema.properties) {
-                console
                 const props: Record<string, TypeNode> = {}
                 for (const [k, v] of Object.entries(schema.properties)) {
                     props[k] = mapSchemaToTypeNode(v as Schema | SchemaRef, [...ancestors, schema], depth + 1)
